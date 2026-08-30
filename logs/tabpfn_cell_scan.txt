@@ -1,0 +1,49 @@
+--- cell 84 (markdown) ---
+### 9-4. 다중레이블 부스팅 비교 및 라벨별 임계값 최적화 (성능 개선 시도)
+
+기존 9-1절 모델은 RandomForest + 고정 임계값(0.5)을 사용합니다. 여기서는 (1) XGBoost/LightGBM/CatBoost/TabPFN으로 교체했을 때 성능이 더 나은지 비교하고,
+(2) 가장 성능이 좋은 모델에 대해 라벨별로 F1을 최대화하는 임계값을 따로 탐색해, Hamming Loss/Micro-F1/Macro-F1 개선 여지를 확인합니다.
+
+**추가 베이스라인(심사위원 피드백 대응)**: "TabPFN을 비롯한 추가적인 베이스라인 혹은 해당 모델들을 활용"하라는 피드백에 따라 TabPFN을 포함했습니다.
+TabPFN은 데이터를 외부로 보내는 원격 API(`tabpfn_client`) 방식이 아니라, 모델 가중치만 최초 1회 내려받고 예측 자체는 로컬에서 수행하는 `tabpfn` 패키지를
+사용해 **설문 응답 데이터가 외부로 전송되지 않도록** 했습니다. 다만 (a) 실
+
+--- cell 85 (code) ---
+import os
+from xgboost import XGBClassifier
+from lightgbm import LGBMClassifier
+from catboost import CatBoostClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.dummy import DummyClassifier
+
+boost_models = {
+    "XGBoost": MultiOutputClassifier(XGBClassifier(n_estimators=400, max_depth=4, learning_rate=0.05,
+                    subsample=0.9, colsample_bytree=0.9, random_state=42, n_jobs=-1, eval_metric="logloss")),
+    "LightGBM": MultiOutputClassifier(LGBMClassifier(n_e
+
+--- cell 89 (markdown) ---
+### 9-9. LightGBM/CatBoost/TabPFN에도 임계값 최적화 적용 (Validation Split 기준)
+
+9-4절 모델 비교에서 LightGBM(Macro-F1 0.667)·CatBoost(0.670)가 0.5 고정임계값 기준으로도 RandomForest(0.663)보다 Macro-F1이 근소하게 높았습니다(격차 0.004~0.007).
+occupation 인코딩을 수정하기 전 버전에서는 RandomForest가 0.631로 더 크게 뒤처졌지만, 결측을 "미상"으로 뭉뚱그리지 않고 실제 세부상태로 복원한 뒤로 격차가 크게 줄었습니다.
+
+**TabPFN도 함께 포함합니다**: 9-4절에서 TabPFN은 0.5 고정임계값 기준 Macro-F1(0.609)은 다른 모델보다 낮았지만, **평균AUC(0.801)와 Hamming Loss(0.216)는
+전체 비교 모델 중 1위**였습니다. AUC가 가장 높은데 F1이 낮다는 것은 "라벨을 순위 매기는 판별력은 가장 좋지만 
+
+--- cell 90 (code) ---
+lgbm_val = Pipeline([("pre", pre2), ("m", MultiOutputClassifier(LGBMClassifier(
+    n_estimators=500, max_depth=-1, num_leaves=31, learning_rate=0.03, subsample=0.8,
+    class_weight="balanced", random_state=42, n_jobs=-1, verbose=-1)))])
+lgbm_val.fit(X_train2, Y_train2)
+
+cat_val = Pipeline([("pre", pre2), ("m", MultiOutputClassifier(CatBoostClassifier(
+    depth=6, learning_rate=0.05, iterations=500, auto_class_weights="Balanced",
+    random_state=42, verbose=False)))])
+cat_val.fit(X_train2, Y_
+
+--- cell 91 (markdown) ---
+**해석**: TabPFN은 임계값 최적화로 Macro-F1이 **0.600 → 0.666(+6.6%p, 약 11% 상대개선)**으로 크게 좋아졌습니다 — 9-4절에서 예상했던 대로,
+기본 임계값(0.5)이 이 모델에 맞지 않았을 뿐 실제 판별력은 처음부터 좋았다는 뜻입니다. 다만 최종 Macro-F1 1위는 근소한 차이로 **CatBoost(0.675)가
+유지**했고(TabPFN과의 격차 0.009), **Hamming Loss는 TabPFN이 0.5 고정임계값 기준으로 0.218로 전 모델 중 가장 낮습니다**(임계값 최적화 후에는 다른
+모델들처럼 재현율을 높이는 쪽으로 이동해 0.254로 다소 높아짐 — 이는 성능 저하가 아니라 Precision-Recall 트레이드오프에서 Recall 쪽으로 의도적으로
+이동한 결과입니다). 종합하면 **TabPFN은 특정 지표(AUC, 0.5-기준 Hamming)에서는 최고 수준의 판별력을 보이지만, 이 태스크에서 GBDT 계열(CatBoos

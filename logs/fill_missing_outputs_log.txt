@@ -1,0 +1,28 @@
+[캡처] 셀 24: stdout 400자, display 0건, bare-expr 있음
+[캡처] 셀 26: stdout 1486자, display 0건, bare-expr 없음
+[캡처] 셀 27: stdout 52자, display 0건, bare-expr 없음
+[캡처] 셀 29: stdout 499자, display 0건, bare-expr 없음
+[캡처] 셀 38: stdout 131자, display 0건, bare-expr 있음
+[캡처] 셀 78: stdout 188자, display 0건, bare-expr 없음
+[캡처] 셀 80: stdout 270자, display 5건, bare-expr 없음
+[캡처] 셀 83: stdout 244자, display 0건, bare-expr 없음
+[캡처] 셀 85: stdout 217자, display 0건, bare-expr 없음
+[캡처] 셀 90: stdout 346자, display 0건, bare-expr 없음
+[캡처] 셀 148: stdout 375자, display 0건, bare-expr 없음
+
+0~148번 셀 재구성 완료 -- 1286초
+캡처된 대상 셀: [24, 26, 27, 29, 38, 78, 80, 83, 85, 90, 148] (목표 [24, 26, 27, 29, 38, 78, 80, 83, 85, 90, 148]와 일치해야 함)
+셀 24: outputs 2개 항목으로 채움
+셀 26: outputs 1개 항목으로 채움
+셀 27: outputs 1개 항목으로 채움
+셀 29: outputs 1개 항목으로 채움
+셀 38: outputs 2개 항목으로 채움
+셀 78: outputs 1개 항목으로 채움
+셀 80: outputs 6개 항목으로 채움
+셀 83: outputs 1개 항목으로 채움
+셀 85: outputs 1개 항목으로 채움
+셀 90: outputs 1개 항목으로 채움
+셀 148: outputs 1개 항목으로 채움
+
+저장 완료: c:\Users\JS\Desktop\forest_final.ipynb
+총 소요시간: 1286초

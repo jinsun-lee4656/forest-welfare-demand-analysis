@@ -1,0 +1,27 @@
+C:\Users\JS\AppData\Local\Programs\Python\Python312\Lib\site-packages\zmq\_future.py:718: RuntimeWarning: Proactor event loop does not implement add_reader family of methods required for zmq. Registering an additional selector thread for add_reader support via tornado. Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` to avoid this warning.
+  self._get_loop()
+[IPKernelApp] WARNING | Kernel is running over TCP without encryption. All communication (including code and outputs) is sent in plain text and is susceptible to eavesdropping. Use IPC transport or launch with kernel manager-provisioned CurveZMQ keys to enable transport encryption.
+
+!!! 실행 실패 (셀 인덱스 23) — 36초 경과 !!!
+An error occurred while executing the following cell:
+------------------
+## 3. 전처리 (1) — 가구구조 복원 및 인구통계 라벨링
+
+`NO0==1`(가구주)을 기준으로 가구ID를 만들고, 가구주에게만 응답된 소득(DQ5)을 같은 가구원 전체에 전파합니다.
+이어서 연령, 성별, 가구유형, 지역, **학력·직업·소득순위(income_ord)** 등 주요 인구통계 변수에 라벨을 매핑합니다.
+
+**이번 버전에서 정정한 항목**(원자료 SAV 내장 메타데이터로 직접 재검증):
+1. **학력(education)**: DQ2의 4~7번 코드는 "재학/졸업" 여부가 아니라 순수 학교급(4=전문대(4년제 미만), 5=대학교(4년제 이상), 6=대학원 석사과정, 7=대학원 박사과정) 구분입니다. 재학/중퇴/휴학/수료/졸업 여부는 별도 문항(DQ2_1)의 몫인데, 이전 버전은 이를 혼동해 4~7을 "대학재학/대졸/대학원재학/대학원졸"로 잘못 매핑했습니다.
+2. **직업(occupation)**: DQ1_1(직업분류)은 DQ1==1(직업 있음)인 사람만 응답해, DQ1==2(없음)인 3,922명(32.8%)은 구조적으로 결측입니다. 이전 버전은 이 구조적 결측을 나중에 "미상"으로 뭉뚱그렸는데, 실제로는 DQ1==2 분기에서도 세부상태(DQ1_2: 학생/주부/취업준비중/무직/기타)를 온전히 수집하고 있어(두 분기 결측이 정확히 상호배타적 100% 커버 — `check_occupation_detail.py`로 검증) 이를 복원하면 occupation 결측을 0건으로 없앨 수 있습니다.
+3. **지역규모(city_size)**: 3번 코드의 공식 라벨은 "읍면지역"입니다(`SAV_라벨_확인.py`로 확인). 이전 버전의 "군지역"은 의미는 같지만 공식 용어가 아니므로 정정합니다.
+4. **정의 시점**: education/occupation/income_ord를 이전 버전처럼 8~9장에서야 처음 만들지 않고 이 시점(3장)에 미리 만들어, 이후 6장(EDA)·7장(가설검정)·8장(K-means 페르소나)에서도 바로 활용할 수 있게 했습니다(이전에는 이 세 변수가 존재하지 않아 세 장 모두 학력·직업·소득을 전혀 반영하지 못했습니다).
+------------------
+
+
+  [36mCell[39m[36m [39m[32mIn[9][39m[32m, line 8[39m
+[31m    [39m[31m2. **직업(occupation)**: DQ1_1(직업분류)은 DQ1==1(직업 있음)인 사람만 응답해, DQ1==2(없음)인 3,922명(32.8%)은 구조적으로 결측입니다. 이전 버전은 이 구조적 결측을 나중에 "미상"으로 뭉뚱그렸는데, 실제로는 DQ1==2 분기에서도 세부상태(DQ1_2: 학생/주부/취업준비중/무직/기타)를 온전히 수집하고 있어(두 분기 결측이 정확히 상호배타적 100% 커버 — `check_occupation_detail.py`로 검증) 이를 복원하면 occupation 결측을 0건으로 없앨 수 있습니다.[39m
+                                                                                                                                                                                                                                     ^
+[31mSyntaxError[39m[31m:[39m invalid character '—' (U+2014)
+
+
+실패 시점까지의 상태를 저장: c:\Users\JS\Desktop\forest_welfare_analysis (2).FAILED.ipynb

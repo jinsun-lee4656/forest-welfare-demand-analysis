@@ -1,0 +1,61 @@
+from sklearn.model_selection import GroupShuffleSplit, GroupKFold
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.multioutput import MultiOutputClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.metrics import (accuracy_score, f1_score, balanced_accuracy_score, roc_auc_score,
+                              label_ranking_average_precision_score, average_precision_score)
+
+BROAD_CATS = ["등산·트레킹형","자연감상·산책형","캠핑·야영형","체험·학습형","치유·웰니스형","레포츠·모험형"]
+CAT_MERGE = {"문화향유형": "체험·학습형", "기타": "체험·학습형"}  # 표본 1~2명뿐인 희소 카테고리 통합
+
+def broad_merged(code_):
+    b = ACTIVITY_TO_BROAD.get(code_, "기타")
+    return CAT_MERGE.get(b, b)
+
+for cat in BROAD_CATS:
+    codes_in_cat = [c for c in ACTIVITY_TO_BROAD if broad_merged(c) == cat]
+    # 과거 행태 피처 (Q10, 타깃과 별개 문항)
+    df[f"past_{cat}"] = df.apply(lambda r, cc=codes_in_cat: int(
+        any(c in (r["daytrip_activity_codes"] or []) for c in cc) or
+        any(c in (r["overnight_activity_codes"] or []) for c in cc)), axis=1)
+    df[f"pastcnt_{cat}"] = df.apply(lambda r, cc=codes_in_cat: (
+        sum(1 for c in (r["daytrip_activity_codes"] or []) if c in cc) +
+        sum(1 for c in (r["overnight_activity_codes"] or []) if c in cc)), axis=1)
+    # 다중레이블 타깃 (Q17, 향후의향)
+    df[f"intent_{cat}"] = df["intent_activity_codes"].apply(lambda cs, cc=codes_in_cat: int(any(c in cs for c in cc)))
+
+df["education"] = df["DQ2"].map({1:"초졸이하",2:"중졸",3:"고졸",4:"대학재학",5:"대졸",6:"대학원재학",7:"대학원졸"})
+df["occupation"] = df["DQ1_1"].map({1:"관리자",2:"전문가",3:"사무",4:"서비스",5:"판매",6:"농림어업",
+                                     7:"기능원",8:"장치조작",9:"단순노무",10:"군인"})
+
+LIKERT_COLS = ["Q18", "Q22", "Q8"]  # 0~10점 척도 — 0("부정적/불만족")도 유효 응답이라 fillna(0)으로 채우면 "무응답"과 "실제 최저점"이 섞임
+
+FEATURES_NUM = (["age","income_ord","n_activity_types_experienced","n_daytrip_activity_types",
+                  "n_overnight_activity_types","daytrip_avg_spend","overnight_avg_spend",
+                  "daytrip_n_records","overnight_n_records",
+                  "facility_aware_n","facility_used_n","program_aware_n","program_used_n"]
+                 + LIKERT_COLS + [f"{c}_missing" for c in LIKERT_COLS]
+                 + [f"past_{c}" for c in BROAD_CATS] + [f"pastcnt_{c}" for c in BROAD_CATS])
+FEATURES_CAT = ["gender","hh_type","city_size","marital","education","occupation","sido",
+                "daytrip_dominant_season","daytrip_dominant_companion_label","daytrip_dominant_purpose_label",
+                "overnight_dominant_season","overnight_dominant_companion_label","overnight_dominant_purpose_label"]
+Y_COLS = [f"intent_{c}" for c in BROAD_CATS]
+
+# 구조적 결측(무응답) 처리: 0~10점 척도는 0도 유효 응답이므로, 척도 밖 값(-1)+별도 결측 플래그로 "무응답"을 명시적으로 구분
+# df 자체에 적용해 10장(시설모델)·9-5절(이용목적 모델)에서도 동일하게 재사용
+for c in LIKERT_COLS:
+    df[f"{c}_missing"] = df[c].isna().astype(int)
+    df[c] = df[c].fillna(-1)
+
+model_df = df[df["pref_activity_broad"].notna()].copy()
+for c in FEATURES_NUM:
+    if c not in LIKERT_COLS and not c.endswith("_missing"):
+        model_df[c] = model_df[c].fillna(0)
+for c in FEATURES_CAT:
+    model_df[c] = model_df[c].fillna("미상")
+
+print("라벨(광역카테고리)별 향후의향 비율(%):")
+print((model_df[Y_COLS].mean()*100).round(1))
+print("\n1인당 평균 선택 카테고리 수:", model_df[Y_COLS].sum(axis=1).mean().round(2), "(참고: 1개보다 크다는 것 자체가 단일분류가 부적합했다는 근거)")
+
+pre2 = ColumnTransformer([("num","passthrough",FEATURES_NUM), ("cat", OneHotEncoder(handle_unknown="ignore"), FEATURES_CAT)])

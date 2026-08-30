@@ -1,0 +1,38 @@
+X = model_df[FEATURES_NUM + FEATURES_CAT]
+Y = model_df[Y_COLS]
+groups = model_df["hh_id"]
+
+gss = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=42)
+train_idx, test_idx = next(gss.split(X, Y, groups))
+X_train, X_test = X.iloc[train_idx], X.iloc[test_idx]
+Y_train, Y_test = Y.iloc[train_idx], Y.iloc[test_idx]
+g_train, g_test = groups.iloc[train_idx], groups.iloc[test_idx]
+print(f"[가구단위 분리 확인] train 가구수={g_train.nunique()}, test 가구수={g_test.nunique()}, "
+      f"교집합 가구수={len(set(g_train)&set(g_test))} (0이어야 leakage 없음)")
+print(f"train n={len(X_train)}, test n={len(X_test)}")
+
+clf_ml = Pipeline([("pre", pre2), ("rf", MultiOutputClassifier(
+    RandomForestClassifier(n_estimators=400, max_depth=18, min_samples_leaf=2,
+                            class_weight="balanced", random_state=42, n_jobs=-1)))])
+clf_ml.fit(X_train, Y_train)
+
+proba_list = clf_ml.predict_proba(X_test)
+proba_mat = np.column_stack([p[:, 1] for p in proba_list])
+pred_mat = (proba_mat >= 0.5).astype(int)
+
+auc_per_label, f1_per_label, ap_per_label = {}, {}, {}
+for i, cat in enumerate(BROAD_CATS):
+    if Y_test.iloc[:, i].nunique() > 1:
+        auc_per_label[cat] = roc_auc_score(Y_test.iloc[:, i], proba_mat[:, i])
+    f1_per_label[cat] = f1_score(Y_test.iloc[:, i], pred_mat[:, i])
+    ap_per_label[cat] = average_precision_score(Y_test.iloc[:, i], proba_mat[:, i])
+
+macro_f1 = float(np.mean(list(f1_per_label.values())))
+lrap = label_ranking_average_precision_score(Y_test.values, proba_mat)
+
+metric_df = pd.DataFrame({"AUC": pd.Series(auc_per_label), "F1(0.5기준)": pd.Series(f1_per_label),
+                           "PR-AUC(Average Precision)": pd.Series(ap_per_label)})
+display(metric_df.round(3))
+print("(참고: ROC-AUC 0.84처럼 높아 보여도 라벨이 불균형하면 실제 양성 예측력은 낮을 수 있어, 클래스 불균형에 더 민감한 PR-AUC를 함께 확인합니다)")
+print(f"\nMacro-F1: {macro_f1:.3f}  (참고: 이전 단일분류 버전 macro-F1 0.368 — 다만 타깃 정의 자체가 달라(단일분류 vs 다중레이블) 엄밀히 직접 비교 가능한 수치는 아님)")
+print(f"LRAP(Label Ranking Average Precision): {lrap:.3f}  (1.0에 가까울수록 추천 순위가 완벽함)")

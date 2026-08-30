@@ -1,0 +1,25 @@
+K = 2
+topk_idx = np.argsort(-proba_mat, axis=1)[:, :K]
+Y_test_arr = Y_test.values
+prec_list, rec_list, hit_list = [], [], []
+for i in range(len(Y_test_arr)):
+    true_idx = set(np.where(Y_test_arr[i] == 1)[0])
+    pred_idx = set(topk_idx[i])
+    if len(true_idx) == 0:
+        continue
+    inter = len(true_idx & pred_idx)
+    prec_list.append(inter / K)
+    rec_list.append(inter / len(true_idx))
+    hit_list.append(1 if inter > 0 else 0)
+
+prec2, rec2, hit2 = float(np.mean(prec_list)), float(np.mean(rec_list)), float(np.mean(hit_list))
+print(f"Precision@2: {prec2*100:.1f}%  (상위 2개 추천 중 실제로 맞은 비율)")
+print(f"Recall@2: {rec2*100:.1f}%  (실제 선호 카테고리 중 상위 2개 추천이 커버한 비율)")
+print(f"참고 - Hit@2(상위 2개 중 최소 1개 적중): {hit2*100:.1f}%  (1인당 평균 {Y.sum(axis=1).mean():.2f}개를 선택하므로 기준선 자체가 예전보다 쉬워짐에 유의)")
+
+fig, ax = plt.subplots(figsize=(7, 4.5))
+bars = ax.bar(["Precision@2","Recall@2","Hit@2"], [prec2*100, rec2*100, hit2*100], color=PALETTE[:3])
+for b, v in zip(bars, [prec2*100, rec2*100, hit2*100]):
+    ax.text(b.get_x()+b.get_width()/2, v+1, f"{v:.1f}%", ha="center", fontsize=10)
+ax.set_ylabel("%"); ax.set_ylim(0, 105); ax.set_title("선호 활동유형 다중레이블 모델 - Top-2 추천 성능")
+plt.tight_layout(); plt.savefig(FIGDIR / "12b_topn_hitrate.png", dpi=150); plt.show()

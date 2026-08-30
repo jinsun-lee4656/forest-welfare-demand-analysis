@@ -1,0 +1,35 @@
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+from sklearn.decomposition import PCA
+
+income_ord_map = {"100만원미만":1,"100-200만원":2,"200-300만원":3,"300-400만원":4,"400-500만원":5,
+                   "500-600만원":6,"600-700만원":7,"700-800만원":8,"800만원이상":9}
+df["income_ord"] = df["income_band"].map(income_ord_map)
+
+CLUSTER_NUM = ["age","income_ord","n_activity_types_experienced","n_daytrip_activity_types",
+               "n_overnight_activity_types","facility_gap","program_gap","Q18","Q22",
+               "daytrip_avg_spend","overnight_avg_spend"]
+CLUSTER_CAT = ["gender","hh_type","city_size"]
+
+work = df[CLUSTER_NUM + CLUSTER_CAT + ["resp_id","WT"]].copy()
+for c in ["daytrip_avg_spend","overnight_avg_spend"]:
+    work[c] = work[c].fillna(0)
+for c in ["Q18","Q22","income_ord"]:
+    work[c] = work[c].fillna(work[c].median())
+work = work.dropna(subset=CLUSTER_CAT)
+
+pre = ColumnTransformer([("num", StandardScaler(), CLUSTER_NUM), ("cat", OneHotEncoder(drop="first"), CLUSTER_CAT)])
+X = pre.fit_transform(work[CLUSTER_NUM + CLUSTER_CAT])
+
+rng = np.random.RandomState(42)
+sample_idx = rng.choice(X.shape[0], size=3000, replace=False)
+sil_scores = {}
+for k in range(3, 9):
+    km_k = KMeans(n_clusters=k, random_state=42, n_init=10).fit(X)
+    sil_scores[k] = silhouette_score(X[sample_idx], km_k.labels_[sample_idx])
+    print(f"k={k}: silhouette={sil_scores[k]:.4f}")
+
+best_k = max(sil_scores, key=sil_scores.get)
+print("선택된 k:", best_k)

@@ -1,0 +1,80 @@
+C:\Users\JS\AppData\Local\Programs\Python\Python312\Lib\site-packages\zmq\_future.py:718: RuntimeWarning: Proactor event loop does not implement add_reader family of methods required for zmq. Registering an additional selector thread for add_reader support via tornado. Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` to avoid this warning.
+  self._get_loop()
+[IPKernelApp] WARNING | Kernel is running over TCP without encryption. All communication (including code and outputs) is sent in plain text and is susceptible to eavesdropping. Use IPC transport or launch with kernel manager-provisioned CurveZMQ keys to enable transport encryption.
+
+!!! 실행 실패 (셀 인덱스 26) — 34초 경과 !!!
+An error occurred while executing the following cell:
+------------------
+# --- 기초 위생점검 ---
+print("[1] 완전 중복행 수:", raw.duplicated().sum(), "(0이어야 함)")
+dup_person = df.duplicated(subset=["hh_id", "NO0"]).sum()
+print("[2] (hh_id, NO0) 조합 중복 수:", dup_person, "(0이어야 각 가구원이 유일)")
+assert raw.duplicated().sum() == 0 and dup_person == 0, "중복행/중복 가구원 발견"
+
+head_count_per_hh = df.groupby("hh_id")["NO0"].apply(lambda s: (s == 1).sum())
+bad_heads = int((head_count_per_hh != 1).sum())
+assert bad_heads == 0, f"가구주가 정확히 1명이 아닌 가구 {bad_heads}개 존재"
+print(f"[3] 가구주(NO0==1) 정확히 1명인 가구: {df['hh_id'].nunique()}개 전부 통과")
+
+# 결측치 요약 (원본 668개 컬럼 기준 — 스킵로직에 따른 구조적 결측이 대부분이라 결측률 자체가 "문제"는 아님)
+na_pct = (raw.isna().mean() * 100).sort_values(ascending=False)
+print(f"\n[4] 원본 {raw.shape[1]}개 컬럼 중 결측 0%: {(na_pct == 0).sum()}개 / 결측률 상위 5개(대부분 스킵로직에 의한 구조적 결측):")
+print(na_pct.head(5).round(1))
+
+# 나이 계산(SURVEY_YEAR - SQ7_1) vs 공식 라벨(D_SQ7) 경계 교차검증
+# SQ7_1이 "출생연도"만 있어 생일 경과여부에 따라 경계에서 최대 ±1세 오차가 남는 것을 확인(정상 — 위 3장 주석 참고)
+print("\n[5] age(연산값) 경계에서 age_band(공식라벨) 분포 — 생일 미상으로 인한 ±1세 경계오차 재확인:")
+for boundary in [20, 30, 40, 50, 60, 70]:
+    sub = df[df["age"] == boundary]
+    print(f"  age=={boundary}세 {len(sub)}명 -> age_band 분포: {sub['age_band'].value_counts().to_dict()}")
+
+# 자기보고식 지출액/숙박일수 이상치 점검 — 음수·비현실적 극단값 여부만 확인, winsorizing은 미적용
+spend_day_cols = [c for c in raw.columns if c.startswith("Q11_8A")]
+spend_night_cols = [c for c in raw.columns if c.startswith("Q12_8A")]
+nights_cols = [c for c in raw.columns if c.startswith("Q12_5_11A")]
+day_spend_all = pd.concat([raw[c] for c in spend_day_cols])
+night_spend_all = pd.concat([raw[c] for c in spend_night_cols])
+nights_all = pd.concat([raw[c] for c in nights_cols])
+print("\n[6] 지출액/숙박일수 이상치 점검(min/25%/50%/75%/max):")
+print("  당일형 1인평균소비금액(만원):", day_spend_all.describe()[["min", "25%", "50%", "75%", "max"]].round(1).to_dict())
+print("  숙박형 1인평균소비금액(만원):", night_spend_all.describe()[["min", "25%", "50%", "75%", "max"]].round(1).to_dict())
+print("  숙박일수:", nights_all.describe()[["min", "25%", "50%", "75%", "max"]].round(1).to_dict())
+assert day_spend_all.min() >= 0 and night_spend_all.min() >= 0 and nights_all.min() >= 0, "음수 값 발견"
+print("  -> 음수값 없음. 상한(당일 68만원/숙박 80만원/6박)도 자기보고식 여행지출로 불가능한 범위는 아니라고 판단해 winsorizing 미적용")
+
+# --- DQ5(가구소득) ffill/bfill 전파 로직 검증: 원본 응답이 SQ8==1(가구주 본인)과 정확히 일치하는지 ---
+mismatch_has_not_head = int(((raw["DQ5"].notna()) & (raw["SQ8"] != 1)).sum())
+mismatch_head_no_dq5 = int(((raw["DQ5"].isna()) & (raw["SQ8"] == 1)).sum())
+assert mismatch_has_not_head == 0, f"가구주 아닌데 DQ5 응답 있는 행 {mismatch_has_not_head}건"
+assert mismatch_head_no_dq5 == 0, f"가구주인데 DQ5 결측인 행 {mismatch_head_no_dq5}건"
+print(f"\n[7] DQ5(가구소득) 원본 응답은 SQ8==1(가구주 본인) {int((raw['SQ8'] == 1).sum())}명과 정확히 1:1 일치 "
+      f"(불일치 0건) → 3장의 ffill/bfill 가구단위 전파가 올바른 응답조건에 기반함을 확인")
+
+# --- dtype 점검 ---
+dtype_counts = raw.dtypes.value_counts()
+print("[8] 원본 dtype 분포:", dtype_counts.to_dict())
+
+obj_cols = raw.select_dtypes(include=["object", "string"]).columns.tolist()
+non_etc_obj = [c for c in obj_cols if "ETC" not in c.upper()]
+assert not non_etc_obj, f"ETC(주관식) 아닌데 문자열로 읽힌 컬럼 발견 — 숫자 컬럼 오염 가능성: {non_etc_obj}"
+print(f"[9] object(문자열) dtype {len(obj_cols)}개 전부 '_ETC'(주관식 직접작성) 컬럼임을 확인 "
+      f"→ 숫자코드 컬럼이 문자열로 잘못 읽힌 경우 없음")
+
+assert raw["NO0"].dtype.kind in "iu" and raw["WT"].dtype.kind == "f"
+assert (raw["WT"] > 0).all(), "가중치(WT)에 0 이하 값 존재"
+print(f"[10] 핵심 컬럼 dtype 확인 — NO0:{raw['NO0'].dtype}, "
+      f"WT:{raw['WT'].dtype}(전부 양수, {raw['WT'].min():.0f}~{raw['WT'].max():.0f}), "
+      f"CO11:{raw['CO11'].dtype}, SQ7_1:{raw['SQ7_1'].dtype}")
+
+# NO0가 가구별로 1..n 연속인지 (가구주 1명 확인[3]보다 더 엄격한 조건 — 결번/순서뒤바뀜까지 잡아냄)
+bad_seq = sum(1 for _, g in df.groupby("hh_id")["NO0"] if g.tolist() != list(range(1, len(g) + 1)))
+assert bad_seq == 0, f"NO0가 1..n 연속이 아닌 가구 {bad_seq}개 존재"
+print(f"[11] NO0(가구원 일련번호)가 가구별로 1..n 연속인 것까지 확인 — {df['hh_id'].nunique()}개 가구 전부 통과")
+------------------
+
+----- stdout -----
+[1] 완전 중복행 수: 0 (0이어야 함)
+------------------
+
+[31m------------
+실패 시점까지의 상태를 저장: c:\Users\JS\Desktop\forest_welfare_analysis (2).FAILED.ipynb

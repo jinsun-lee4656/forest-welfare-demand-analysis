@@ -1,0 +1,16 @@
+﻿python : C:\Users\JS\AppData\Local\Programs\Python\Python312\Lib\site-packages\zmq\_future.py:718: RuntimeWarning: Proa
+ctor event loop does not implement add_reader family of methods required for zmq. Registering an additional selector th
+read for add_reader support via tornado. Use `asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())` to avoid
+ this warning.
+At line:1 char:333
++ ... \JS\Desktop\MDIS"; python splice_partial_outputs.py *> splice_log.txt
++                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\JS\App...d this warning.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  self._get_loop()
+[IPKernelApp] WARNING | Kernel is running over TCP without encryption. All communication (including code and outputs) i
+s sent in plain text and is susceptible to eavesdropping. Use IPC transport or launch with kernel manager-provisioned C
+urveZMQ keys to enable transport encryption.
+부분 실행 성공 (0~103번 셀)
+원본 노트북에 96~103번 셀 출력 반영 완료: c:\Users\JS\Desktop\forest_welfare_analysis (2).ipynb
